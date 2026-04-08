@@ -20,50 +20,46 @@ async function startServer() {
     res.json(questions);
   });
 
-  app.post("/api/score", (req, res) => {
-    const { answers } = req.body; // answers: { [questionId: number]: number } (0-3)
+  app.post("/predict", (req, res) => {
+    const { responses } = req.body; // responses: Array of 220 integers (0-3)
 
-    if (!answers) {
-      return res.status(400).json({ error: "Answers are required" });
+    if (!responses || !Array.isArray(responses) || responses.length !== 220) {
+      return res.status(400).json({ error: "Invalid responses. Expected array of 220 integers." });
     }
 
-    const processedScores: { [id: number]: number } = {};
-    questions.forEach((q) => {
-      const userScore = answers[q.id];
-      if (userScore !== undefined) {
-        processedScores[q.id] = q.isReverse ? 3 - userScore : userScore;
+    // 1. Process responses (handle reverse scoring and nulls)
+    const reverseItems = [7, 30, 35, 58, 87, 90, 96, 97, 98, 131, 142, 155, 164, 177, 210, 215];
+    const processedResponses: { [id: number]: number } = {};
+    
+    for (let i = 1; i <= 220; i++) {
+      let val = responses[i - 1];
+      if (val === null || val === undefined) {
+        val = 0;
       }
-    });
+      if (reverseItems.includes(i)) {
+        processedResponses[i] = 3 - val;
+      } else {
+        processedResponses[i] = val;
+      }
+    }
 
+    // 2. Compute 25 Facet Scores
     const facetScores: { [name: string]: number } = {};
     Object.entries(facets).forEach(([facetName, itemIds]) => {
-      const scores = itemIds
-        .map((id) => processedScores[id])
-        .filter((s) => s !== undefined);
-      
-      if (scores.length > 0) {
-        const sum = scores.reduce((a, b) => a + b, 0);
-        facetScores[facetName] = sum / scores.length;
-      } else {
-        facetScores[facetName] = 0;
-      }
+      const scores = itemIds.map(id => processedResponses[id]);
+      const sum = scores.reduce((a, b) => a + b, 0);
+      facetScores[facetName] = sum / itemIds.length;
     });
 
+    // 3. Compute 5 Domain Scores
     const domainScores: { [name: string]: number } = {};
     Object.entries(domains).forEach(([domainName, facetNames]) => {
-      const scores = facetNames
-        .map((name) => facetScores[name])
-        .filter((s) => s !== undefined);
-      
-      if (scores.length > 0) {
-        const sum = scores.reduce((a, b) => a + b, 0);
-        domainScores[domainName] = sum / scores.length;
-      } else {
-        domainScores[domainName] = 0;
-      }
+      const scores = facetNames.map(name => facetScores[name]);
+      const sum = scores.reduce((a, b) => a + b, 0);
+      domainScores[domainName] = sum / facetNames.length;
     });
 
-    // Calculate ICD-10 Association Scores
+    // 4. Calculate ICD-10 Results
     const icd10Results = icd10Models.map(model => {
       let rawScore = 0;
       let maxPossible = 0;
@@ -82,21 +78,46 @@ async function startServer() {
         }
       });
 
-      // Normalize to 0-100 index
-      const associationIndex = ((rawScore - minPossible) / (maxPossible - minPossible)) * 100;
+      // Normalize to 0-1 probability
+      const probability = (rawScore - minPossible) / (maxPossible - minPossible);
+      
+      let risk_level = "LOW";
+      let flagged = false;
+      if (probability >= 0.60) {
+        risk_level = "HIGH";
+        flagged = true;
+      } else if (probability >= 0.35) {
+        risk_level = "FLAGGED";
+        flagged = true;
+      }
 
       return {
         code: model.code,
         name: model.name,
-        score: associationIndex,
-        description: model.description
+        probability: parseFloat(probability.toFixed(4)),
+        risk_level,
+        flagged
       };
     });
 
+    // Sort by probability
+    const sortedResults = [...icd10Results].sort((a, b) => b.probability - a.probability);
+    const top = sortedResults[0];
+    const flaggedCount = icd10Results.filter(r => r.flagged).length;
+
+    let clinicalNote = "No personality disorder risk flags detected.";
+    if (flaggedCount > 0) {
+      clinicalNote = `${flaggedCount} risk flag(s) detected. Top association: ${top.name} (${(top.probability * 100).toFixed(1)}%). Clinical follow-up recommended.`;
+    }
+
     res.json({
-      facetScores,
-      domainScores,
-      icd10Results
+      facet_scores: facetScores,
+      domain_scores: domainScores,
+      icd10_results: icd10Results,
+      top_diagnosis: `${top.code} — ${top.name}`,
+      top_probability: top.probability,
+      flagged_count: flaggedCount,
+      clinical_note: clinicalNote
     });
   });
 

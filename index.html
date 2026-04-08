@@ -1,13 +1,597 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clinical Decision Support System | PID-5 to ICD-10</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --navy: #0A192F;
+            --indigo: #4F46E5;
+            --indigo-light: #EEF2FF;
+            --slate: #64748B;
+            --border: #E2E8F0;
+            --bg: #FFFFFF;
+            --red: #EF4444;
+            --yellow: #F59E0B;
+            --green: #10B981;
+        }
 
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg);
+            color: var(--navy);
+            line-height: 1.5;
+        }
+
+        header {
+            background-color: var(--navy);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+            border-bottom: 4px solid var(--indigo);
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            font-size: 0.875rem;
+            opacity: 0.8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        main {
+            max-width: 1000px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .step-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1rem;
+        }
+
+        .step-number {
+            background: var(--indigo);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.875rem;
+        }
+
+        .step-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--navy);
+        }
+
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 3rem;
+            text-align: center;
+            transition: border-color 0.2s;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: var(--indigo);
+            background-color: var(--indigo-light);
+        }
+
+        .btn {
+            background-color: var(--indigo);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background-color: white;
+            color: var(--indigo);
+            border: 1px solid var(--indigo);
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .preview-item {
+            background: var(--indigo-light);
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        .preview-label {
+            font-size: 0.75rem;
+            color: var(--slate);
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .preview-value {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: var(--navy);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--indigo-light);
+            color: var(--indigo);
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+        }
+
+        .facet-table-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .chart-container {
+            margin-top: 2rem;
+            height: 400px;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 768px) {
+            .results-grid {
+                grid-template-columns: 1.5fr 1fr;
+            }
+        }
+
+        .summary-card {
+            background: var(--navy);
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-top: 2rem;
+        }
+
+        .summary-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--indigo-light);
+        }
+
+        .summary-content {
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .flag-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-right: 0.5rem;
+        }
+
+        .flag-high { background: var(--red); color: white; }
+        .flag-flagged { background: var(--yellow); color: white; }
+        .flag-low { background: var(--green); color: white; }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .hidden { display: none; }
+
+        .clinical-note {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(255,255,255,0.1);
+            border-left: 4px solid var(--indigo);
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Clinical Decision Support System</h1>
+    <p>Judy AI × ASU W.P. Carey | Capstone Project 2026</p>
+</header>
+
+<main>
+    <!-- STEP 1: UPLOAD -->
+    <section id="step1" class="step-card">
+        <div class="step-header">
+            <div class="step-number">1</div>
+            <h2 class="step-title">Upload Patient Data</h2>
+        </div>
+        <div class="upload-area" id="dropZone">
+            <p>Drag & drop patient JSON file here or click to browse</p>
+            <input type="file" id="fileInput" class="hidden" accept=".json">
+        </div>
+        <div id="previewArea" class="hidden">
+            <div class="preview-grid">
+                <div class="preview-item">
+                    <div class="preview-label">Patient ID</div>
+                    <div class="preview-value" id="patientId">--</div>
+                </div>
+                <div class="preview-item">
+                    <div class="preview-label">Items Answered</div>
+                    <div class="preview-value" id="itemsAnswered">0 / 220</div>
+                </div>
+                <div class="preview-item">
+                    <div class="preview-label">Missing Items</div>
+                    <div class="preview-value" id="itemsMissing">0</div>
+                </div>
+            </div>
+            <div style="margin-top: 2rem; text-align: right;">
+                <button id="btnCalculate" class="btn">Process & Calculate Facets</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- STEP 2: CALCULATION -->
+    <section id="step2" class="step-card hidden">
+        <div class="step-header">
+            <div class="step-number">2</div>
+            <h2 class="step-title">Calculation Engine</h2>
+        </div>
+        <p style="margin-bottom: 1rem; color: var(--slate);">25 PID-5 facet scores computed from raw responses (including reverse scoring).</p>
+        <div class="facet-table-container">
+            <table id="facetTable">
+                <thead>
+                    <tr>
+                        <th>Facet Name</th>
+                        <th>Score (0-3)</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div style="margin-top: 2rem; text-align: right;">
+            <button id="btnPredict" class="btn">Call Classification API</button>
+        </div>
+    </section>
+
+    <!-- STEP 3 & 4: RESULTS -->
+    <section id="step4" class="step-card hidden">
+        <div class="step-header">
+            <div class="step-number">3 & 4</div>
+            <h2 class="step-title">Clinical Analysis & Results</h2>
+        </div>
+        
+        <div id="loadingArea" class="hidden" style="text-align: center; padding: 3rem;">
+            <div class="spinner" style="border-top-color: var(--indigo); margin: 0 auto 1rem;"></div>
+            <p>Calling Classification API...</p>
+        </div>
+
+        <div id="resultsArea" class="hidden">
+            <div class="results-grid">
+                <div>
+                    <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 1rem;">ICD-10 Probability Profile</h3>
+                    <div class="chart-container">
+                        <canvas id="barChart"></canvas>
+                    </div>
+                </div>
+                <div>
+                    <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 1rem;">Domain Radar</h3>
+                    <div class="chart-container">
+                        <canvas id="radarChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="summary-card">
+                <div class="summary-title">Clinical Summary</div>
+                <div class="summary-content">
+                    <p><strong>Top Diagnosis:</strong> <span id="topDiagnosis">--</span></p>
+                    <p><strong>Top Probability:</strong> <span id="topProb">--</span></p>
+                    <p><strong>Risk Flags:</strong> <span id="flaggedCount">0</span></p>
+                    <div class="clinical-note" id="clinicalNote">--</div>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<script>
+    // PID-5 Configuration
+    const REVERSE_ITEMS = [7, 30, 35, 58, 87, 90, 96, 97, 98, 131, 142, 155, 164, 177, 210, 215];
+    const FACETS = {
+        "Anhedonia": [1, 23, 26, 30, 124, 155, 157, 189],
+        "Anxiousness": [79, 93, 95, 96, 109, 110, 130, 141, 174],
+        "Attention Seeking": [14, 43, 74, 111, 113, 173, 191, 211],
+        "Callousness": [11, 13, 19, 54, 72, 73, 90, 153, 166, 183, 198, 200, 207, 208],
+        "Deceitfulness": [41, 53, 56, 76, 126, 134, 142, 206, 214, 218],
+        "Depressivity": [27, 61, 66, 81, 86, 104, 119, 148, 151, 163, 168, 169, 178, 212],
+        "Distractibility": [6, 29, 47, 68, 88, 118, 132, 144, 199],
+        "Eccentricity": [5, 21, 24, 25, 33, 52, 55, 70, 71, 152, 172, 185, 205],
+        "Emotional Lability": [18, 62, 102, 122, 138, 165, 181],
+        "Grandiosity": [40, 65, 114, 179, 187, 197],
+        "Hostility": [28, 32, 38, 85, 92, 116, 158, 170, 188, 216],
+        "Impulsivity": [4, 16, 17, 22, 58, 204],
+        "Intimacy Avoidance": [89, 97, 108, 120, 145, 203],
+        "Irresponsibility": [31, 129, 156, 160, 171, 201, 210],
+        "Manipulativeness": [107, 125, 162, 180, 219],
+        "Perceptual Dysregulation": [36, 37, 42, 44, 59, 77, 83, 154, 192, 193, 213, 217],
+        "Perseveration": [46, 51, 60, 78, 80, 100, 121, 128, 137],
+        "Restricted Affectivity": [8, 45, 84, 91, 101, 167, 184],
+        "Rigid Perfectionism": [34, 49, 105, 115, 123, 135, 140, 176, 196, 220],
+        "Risk Taking": [3, 7, 35, 39, 48, 67, 69, 87, 98, 112, 159, 164, 195, 215],
+        "Separation Insecurity": [12, 50, 57, 64, 127, 149, 175],
+        "Submissiveness": [9, 15, 63, 202],
+        "Suspiciousness": [2, 103, 117, 131, 133, 177, 190],
+        "Unusual Beliefs & Experiences": [94, 99, 106, 139, 143, 150, 194, 209],
+        "Withdrawal": [10, 20, 75, 82, 136, 146, 147, 161, 182, 186],
+    };
+
+    let rawData = null;
+    let facetScores = {};
+    let barChart = null;
+    let radarChart = null;
+
+    // UI Elements
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const previewArea = document.getElementById('previewArea');
+    const btnCalculate = document.getElementById('btnCalculate');
+    const btnPredict = document.getElementById('btnPredict');
+    const step2 = document.getElementById('step2');
+    const step4 = document.getElementById('step4');
+
+    // File Upload Logic
+    dropZone.onclick = () => fileInput.click();
+    dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--indigo)'; };
+    dropZone.ondragleave = () => { dropZone.style.borderColor = 'var(--border)'; };
+    dropZone.ondrop = (e) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        handleFile(file);
+    };
+    fileInput.onchange = (e) => handleFile(e.target.files[0]);
+
+    function handleFile(file) {
+        if (!file || !file.name.endsWith('.json')) {
+            alert('Please upload a valid JSON file.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                rawData = JSON.parse(e.target.result);
+                showPreview(rawData);
+            } catch (err) {
+                alert('Error parsing JSON file.');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function showPreview(data) {
+        previewArea.classList.remove('hidden');
+        document.getElementById('patientId').innerText = data.patient_id || 'N/A';
+        
+        let answered = 0;
+        for (let i = 1; i <= 220; i++) {
+            if (data[i] !== null && data[i] !== undefined) answered++;
+        }
+        
+        document.getElementById('itemsAnswered').innerText = `${answered} / 220`;
+        document.getElementById('itemsMissing').innerText = 220 - answered;
+    }
+
+    // STEP 2: Calculation
+    btnCalculate.onclick = () => {
+        facetScores = calculateFacets(rawData);
+        displayFacets(facetScores);
+        step2.classList.remove('hidden');
+        step2.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    function calculateFacets(data) {
+        const processed = {};
+        for (let i = 1; i <= 220; i++) {
+            let val = data[i];
+            if (val === null || val === undefined) val = 0;
+            if (REVERSE_ITEMS.includes(i)) {
+                processed[i] = 3 - val;
+            } else {
+                processed[i] = val;
+            }
+        }
+
+        const scores = {};
+        Object.entries(FACETS).forEach(([name, ids]) => {
+            const sum = ids.reduce((acc, id) => acc + processed[id], 0);
+            scores[name] = sum / ids.length;
+        });
+        return scores;
+    }
+
+    function displayFacets(scores) {
+        const tbody = document.querySelector('#facetTable tbody');
+        tbody.innerHTML = '';
+        Object.entries(scores).sort().forEach(([name, score]) => {
+            const row = `<tr><td>${name}</td><td><strong>${score.toFixed(2)}</strong></td></tr>`;
+            tbody.innerHTML += row;
+        });
+    }
+
+    // STEP 3: API Call
+    btnPredict.onclick = async () => {
+        step4.classList.remove('hidden');
+        document.getElementById('loadingArea').classList.remove('hidden');
+        document.getElementById('resultsArea').classList.add('hidden');
+        step4.scrollIntoView({ behavior: 'smooth' });
+
+        // Prepare responses array for API
+        const responses = [];
+        for (let i = 1; i <= 220; i++) {
+            responses.push(rawData[i] === null || rawData[i] === undefined ? 0 : rawData[i]);
+        }
+
+        try {
+            // In a real scenario, this would be http://localhost:8000/predict
+            // For the demo, we call our local Express server which implements the logic
+            const response = await fetch('/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ responses })
+            });
+            const result = await response.json();
+            showResults(result);
+        } catch (err) {
+            alert('Error calling API. Please ensure the backend is running.');
+            document.getElementById('loadingArea').classList.add('hidden');
+        }
+    };
+
+    function showResults(data) {
+        document.getElementById('loadingArea').classList.add('hidden');
+        document.getElementById('resultsArea').classList.remove('hidden');
+
+        // Update Summary
+        document.getElementById('topDiagnosis').innerText = data.top_diagnosis;
+        document.getElementById('topProb').innerText = (data.top_probability * 100).toFixed(1) + '%';
+        document.getElementById('flaggedCount').innerText = data.flagged_count;
+        document.getElementById('clinicalNote').innerText = data.clinical_note;
+
+        // Bar Chart
+        const barCtx = document.getElementById('barChart').getContext('2d');
+        if (barChart) barChart.destroy();
+        
+        const sortedIcd = data.icd10_results.sort((a, b) => b.probability - a.probability);
+        
+        barChart = new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: sortedIcd.map(r => r.code),
+                datasets: [{
+                    label: 'Probability',
+                    data: sortedIcd.map(r => r.probability),
+                    backgroundColor: sortedIcd.map(r => {
+                        if (r.probability >= 0.60) return '#EF4444';
+                        if (r.probability >= 0.35) return '#F59E0B';
+                        return '#10B981';
+                    }),
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { min: 0, max: 1, ticks: { callback: v => (v * 100) + '%' } }
+                }
+            }
+        });
+
+        // Radar Chart
+        const radarCtx = document.getElementById('radarChart').getContext('2d');
+        if (radarChart) radarChart.destroy();
+
+        const domainLabels = Object.keys(data.domain_scores);
+        const domainValues = Object.values(data.domain_scores);
+
+        radarChart = new Chart(radarCtx, {
+            type: 'radar',
+            data: {
+                labels: domainLabels.map(l => l.replace('_', ' ')),
+                datasets: [{
+                    label: 'Domain Score',
+                    data: domainValues,
+                    backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                    borderColor: 'var(--indigo)',
+                    pointBackgroundColor: 'var(--indigo)',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: { min: 0, max: 3, ticks: { display: false } }
+                }
+            }
+        });
+    }
+</script>
+
+</body>
+</html>
